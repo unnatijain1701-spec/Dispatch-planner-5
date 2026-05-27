@@ -308,9 +308,22 @@ input[type=file]{display:none}
         <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-overtime-hours" value="14" min="8" max="20"> <span style="font-size:12px;color:var(--text-muted)">hrs</span></div>
       </div>
       <div style="font-size:13px;font-weight:600;margin:16px 0 10px;color:var(--text-muted)">NO-ENTRY WINDOWS</div>
-      <div class="alert alert-warn" style="font-size:11px">These are built into route planning. Stops in restricted zones are sequenced to arrive within allowed windows.</div>
-      <div style="font-size:12px;padding:6px 0;border-bottom:1px solid var(--gray-border)"><strong>Delhi:</strong> 7:00 AM–11:00 AM &amp; 4:00 PM–9:00 PM</div>
-      <div style="font-size:12px;padding:6px 0"><strong>Gurgaon:</strong> 8:00 AM–10:00 AM &amp; 5:00 PM–9:00 PM</div>
+      <div class="setting-row" style="border-bottom:none;padding-bottom:4px">
+        <div><div class="setting-label">Apply no-entry restrictions</div><div class="setting-sub">Schedule routes around Delhi &amp; Gurgaon no-entry windows</div></div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <div style="position:relative;display:inline-block;width:44px;height:24px">
+            <input type="checkbox" id="s-no-entry" checked style="opacity:0;width:0;height:0;position:absolute">
+            <span id="s-no-entry-track" onclick="toggleNoEntry()" style="position:absolute;inset:0;background:var(--green);border-radius:24px;cursor:pointer;transition:.2s">
+              <span id="s-no-entry-thumb" style="position:absolute;left:22px;top:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
+            </span>
+          </div>
+          <span id="s-no-entry-label" style="font-size:12px;font-weight:500;color:var(--green)">ON</span>
+        </label>
+      </div>
+      <div id="no-entry-details">
+        <div style="font-size:12px;padding:5px 0;border-top:1px solid var(--gray-border);border-bottom:1px solid var(--gray-border);margin-top:4px"><strong>Delhi:</strong> 7:00 AM–11:00 AM &amp; 4:00 PM–9:00 PM</div>
+        <div style="font-size:12px;padding:5px 0"><strong>Gurgaon:</strong> 8:00 AM–10:00 AM &amp; 5:00 PM–9:00 PM</div>
+      </div>
     </div>
   </div>
 
@@ -353,7 +366,6 @@ input[type=file]{display:none}
       <div id="route-map"></div>
       <div style="margin-top:16px">
         <div style="font-size:13px;font-weight:600;margin-bottom:6px">Drop Sequence</div>
-        <div id="modal-timing-note" class="alert alert-info" style="font-size:11px;margin-bottom:10px"></div>
         <ul class="stop-list" id="modal-stops"></ul>
       </div>
     </div>
@@ -411,6 +423,7 @@ function getZone(lat,lon){
 }
 function isNoEntry(zone,arrivalMins){
   // Returns true if vehicle CANNOT enter at this time
+  if(!getSettings().noEntry) return false; // restrictions disabled
   if(zone==='Delhi'){
     const w1=arrivalMins>=7*60&&arrivalMins<=11*60;
     const w2=arrivalMins>=16*60&&arrivalMins<=21*60;
@@ -450,8 +463,19 @@ function getSettings(){
     maxDist:parseInt(document.getElementById('s-max-dist')?.value||150),
     maxHours:parseInt(document.getElementById('s-max-hours')?.value||12),
     overtimeHours:parseInt(document.getElementById('s-overtime-hours')?.value||14),
-    outstationKm:parseInt(document.getElementById('s-outstation-km')?.value||80)
+    outstationKm:parseInt(document.getElementById('s-outstation-km')?.value||80),
+    noEntry:document.getElementById('s-no-entry')?.checked!==false
   };
+}
+function toggleNoEntry(){
+  const cb=document.getElementById('s-no-entry');
+  cb.checked=!cb.checked;
+  const on=cb.checked;
+  document.getElementById('s-no-entry-track').style.background=on?'var(--green)':'#cbd5e1';
+  document.getElementById('s-no-entry-thumb').style.left=on?'22px':'3px';
+  document.getElementById('s-no-entry-label').textContent=on?'ON':'OFF';
+  document.getElementById('s-no-entry-label').style.color=on?'var(--green)':'var(--text-muted)';
+  document.getElementById('no-entry-details').style.opacity=on?'1':'0.4';
 }
 function assignVehicle(weight){
   // Prefer larger vehicles to maximise load per trip & reduce total vehicles
@@ -700,8 +724,8 @@ function buildRouteFromCluster(cluster,s,isOutstation){
   const firstStopDist=haversine(WH.lat,WH.lon,ordered[0].lat,ordered[0].lon);
   const timeToFirstStop=(firstStopDist/speed)*60+s.loadingMin;
 
-  // Check if route has Delhi or Gurgaon stops
-  const hasRestricted=ordered.some(o=>{
+  // Check if route has Delhi or Gurgaon stops (only matters when no-entry is ON)
+  const hasRestricted=s.noEntry&&ordered.some(o=>{
     const z=getZone(o.lat,o.lon);
     return z==='Delhi'||z==='Gurgaon';
   });
@@ -968,11 +992,6 @@ function openRouteModal(route,idx){
     <div class="stat"><div class="stat-label">Total distance</div><div class="stat-value">${route.totalDistKm} km<div style="font-size:10px;color:var(--text-muted);margin-top:1px">aerial estimate</div></div></div>
     <div class="stat"><div class="stat-label">Total weight</div><div class="stat-value">${route.totalWeight} kg</div></div>
     <div class="stat"><div class="stat-label">Est. duration</div><div class="stat-value" style="${durationStyle}">${hours}h ${mins}m${overtimeTag}</div></div>`;
-  // Update timing note
-  document.getElementById('modal-timing-note').innerHTML=
-    `ℹ️ <strong>Distances shown are aerial (straight-line)</strong> — actual road distances are typically 20–30% longer. `+
-    `<strong>Arrive</strong> = vehicle reaches the drop point. After arrival, the vehicle unloads for <strong>${settings.unloadingMin} min</strong> before departing to the next stop. `+
-    `<strong>Depart</strong> = time the vehicle leaves for the next stop.`;
   // Stop list
   const ul=document.getElementById('modal-stops');
   ul.innerHTML='';
