@@ -424,35 +424,33 @@ function getZone(lat,lon){
   return 'NCR';
 }
 function isNoEntry(zone,arrivalMins){
-  // Returns true if vehicle CANNOT enter at this time
+  // Returns true if vehicle CANNOT enter at this time (during no-entry window)
   if(!getSettings().noEntry) return false; // restrictions disabled
   if(zone==='Delhi'){
-    const w1=arrivalMins>=7*60&&arrivalMins<=11*60;
-    const w2=arrivalMins>=16*60&&arrivalMins<=21*60;
-    return !w1&&!w2;
+    // No-entry FOR commercial vehicles: 7–11 AM and 4–9 PM (prohibited hours)
+    const w1=arrivalMins>=7*60&&arrivalMins<11*60;
+    const w2=arrivalMins>=16*60&&arrivalMins<21*60;
+    return w1||w2;  // blocked DURING these windows
   }
   if(zone==='Gurgaon'){
-    const w1=arrivalMins>=8*60&&arrivalMins<=10*60;
-    const w2=arrivalMins>=17*60&&arrivalMins<=21*60;
-    return !w1&&!w2;
+    // No-entry: 8–10 AM and 5–9 PM
+    const w1=arrivalMins>=8*60&&arrivalMins<10*60;
+    const w2=arrivalMins>=17*60&&arrivalMins<21*60;
+    return w1||w2;
   }
   return false;
 }
 function nextAllowedWindow(zone,fromMins){
-  // Returns the next allowed entry start time >= fromMins
+  // Returns the earliest time >= fromMins when no-entry restriction has ENDED
   if(zone==='Delhi'){
-    if(fromMins<=7*60) return 7*60;
-    if(fromMins<=11*60) return fromMins; // already in window
-    if(fromMins<=16*60) return 16*60;
-    if(fromMins<=21*60) return fromMins; // already in window
-    return 7*60+24*60; // next day (edge case)
+    if(fromMins>=7*60&&fromMins<11*60) return 11*60;  // wait until after morning no-entry
+    if(fromMins>=16*60&&fromMins<21*60) return 21*60; // wait until after evening no-entry
+    return fromMins; // already in a free window
   }
   if(zone==='Gurgaon'){
-    if(fromMins<=8*60) return 8*60;
-    if(fromMins<=10*60) return fromMins;
-    if(fromMins<=17*60) return 17*60;
-    if(fromMins<=21*60) return fromMins;
-    return 8*60+24*60;
+    if(fromMins>=8*60&&fromMins<10*60) return 10*60;  // wait until after morning no-entry
+    if(fromMins>=17*60&&fromMins<21*60) return 21*60; // wait until after evening no-entry
+    return fromMins;
   }
   return fromMins;
 }
