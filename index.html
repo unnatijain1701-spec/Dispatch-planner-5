@@ -723,12 +723,14 @@ function buildRouteFromCluster(cluster,s,isOutstation){
   // totalRouteMins will be derived from actual simulation (returnMins - dispatchMins) below
 
   // ── Dispatch time calculation ──
-  // Dense sweep: try every 15 min from 3am–10pm, score by conflicts then late arrivals.
-  // This finds the globally optimal dispatch window, eliminating most warnings automatically.
+  // Dense sweep: try every 15 min from 3am–10pm, score by:
+  //   conflicts (highest weight) → late arrivals → total earliness in hours
+  // The earliness penalty makes the optimizer dispatch LATER so vehicles
+  // arrive close to each stop's ETA rather than 12–14 hours before it.
   function simulateDispatch(dispMins){
     let cum=dispMins+s.loadingMin;
     let pl=WH.lat,plo=WH.lon;
-    let conflicts=0,lateCount=0;
+    let conflicts=0,lateCount=0,totalEarlyMins=0;
     const stops=ordered.map((o,i)=>{
       const dist=haversine(pl,plo,o.lat,o.lon);
       cum+=(dist*rf/speed)*60;
@@ -741,6 +743,8 @@ function buildRouteFromCluster(cluster,s,isOutstation){
       const etaMins=etaToMinutes(o.eta);
       const late=arr>etaMins&&etaMins<23*60;
       if(late) lateCount++;
+      // Earliness: minutes before ETA (skip "As per customer" ETAs = 23:59)
+      if(!late&&etaMins<23*60) totalEarlyMins+=Math.max(0,etaMins-arr);
       const zone2=getZone(o.lat,o.lon);
       const conflict=s.noEntry&&(zone2==='Delhi'||zone2==='Gurgaon')&&isNoEntry(zone2,arr);
       if(conflict) conflicts++;
@@ -748,14 +752,16 @@ function buildRouteFromCluster(cluster,s,isOutstation){
       pl=o.lat;plo=o.lon;
       return{...o,arrivalMins:arr,arrivalTime:minutesToTime(arr),conflict,late,stopNum:i+1,dist:Math.round(dist*10)/10,zone:zone2};
     });
-    return{stops,conflicts,lateCount,dispMins};
+    return{stops,conflicts,lateCount,totalEarlyMins,dispMins};
   }
 
   let best=null;
   for(let t=3*60;t<=22*60;t+=15){
     const sim=simulateDispatch(t);
-    const score=sim.conflicts*1000+sim.lateCount;
-    if(!best||score<best.score||(score===best.score&&t<best.dispMins)){
+    // Score: eliminate conflicts first, then late arrivals, then minimise earliness (hours)
+    const score=sim.conflicts*1000+sim.lateCount*100+Math.round(sim.totalEarlyMins/60);
+    // On equal score prefer LATER dispatch (arrive closer to ETA rather than hours before)
+    if(!best||score<best.score||(score===best.score&&t>best.dispMins)){
       best={...sim,score};
     }
   }
