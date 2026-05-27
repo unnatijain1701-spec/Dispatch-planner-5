@@ -273,52 +273,51 @@ input[type=file]{display:none}
       <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text-muted)">TIME & SPEED</div>
       <div class="setting-row">
         <div><div class="setting-label">Loading buffer at warehouse</div><div class="setting-sub">Time to load vehicle before dispatch</div></div>
-        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-loading" value="20" min="5" max="60"> <span style="font-size:12px;color:var(--text-muted)">min</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-loading" value="20" min="5" max="60" onchange="onSettingChange()"> <span style="font-size:12px;color:var(--text-muted)">min</span></div>
       </div>
       <div class="setting-row">
         <div><div class="setting-label">Unloading buffer per stop</div><div class="setting-sub">Unload + formalities at each outlet</div></div>
-        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-unloading" value="20" min="5" max="60"> <span style="font-size:12px;color:var(--text-muted)">min</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-unloading" value="20" min="5" max="60" onchange="onSettingChange()"> <span style="font-size:12px;color:var(--text-muted)">min</span></div>
       </div>
       <div class="setting-row">
         <div><div class="setting-label">City speed (NCR)</div><div class="setting-sub">Average speed within Delhi NCR</div></div>
-        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-city-speed" value="30" min="10" max="60"> <span style="font-size:12px;color:var(--text-muted)">km/h</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-city-speed" value="30" min="10" max="60" onchange="onSettingChange()"> <span style="font-size:12px;color:var(--text-muted)">km/h</span></div>
       </div>
       <div class="setting-row">
         <div><div class="setting-label">Highway speed (Outstation)</div><div class="setting-sub">Average speed on highways</div></div>
-        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-highway-speed" value="55" min="30" max="100"> <span style="font-size:12px;color:var(--text-muted)">km/h</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-highway-speed" value="55" min="30" max="100" onchange="onSettingChange()"> <span style="font-size:12px;color:var(--text-muted)">km/h</span></div>
       </div>
     </div>
     <div class="card">
       <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text-muted)">ROUTE CONSTRAINTS</div>
       <div class="setting-row">
         <div><div class="setting-label">Max route distance (NCR)</div></div>
-        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-max-dist" value="150" min="50" max="300"> <span style="font-size:12px;color:var(--text-muted)">km</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-max-dist" value="150" min="50" max="300" onchange="onSettingChange()"> <span style="font-size:12px;color:var(--text-muted)">km</span></div>
       </div>
       <!-- max-hours moved to route constraints card -->
       <div class="setting-row">
         <div><div class="setting-label">Outstation threshold</div><div class="setting-sub">Outlets beyond this are outstation</div></div>
-        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-outstation-km" value="80" min="50" max="150"> <span style="font-size:12px;color:var(--text-muted)">km</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-outstation-km" value="80" min="50" max="150" onchange="onSettingChange()"> <span style="font-size:12px;color:var(--text-muted)">km</span></div>
       </div>
       <div class="setting-row">
         <div><div class="setting-label">Regular driver hours</div><div class="setting-sub">Normal shift limit (routes beyond this show ⚡)</div></div>
-        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-max-hours" value="12" min="4" max="20"> <span style="font-size:12px;color:var(--text-muted)">hrs</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-max-hours" value="12" min="4" max="20" onchange="onSettingChange()"> <span style="font-size:12px;color:var(--text-muted)">hrs</span></div>
       </div>
       <div class="setting-row">
         <div><div class="setting-label">Max overtime hours</div><div class="setting-sub">Hard upper limit per route (overtime allowed)</div></div>
-        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-overtime-hours" value="14" min="8" max="20"> <span style="font-size:12px;color:var(--text-muted)">hrs</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><input type="number" id="s-overtime-hours" value="14" min="8" max="20" onchange="onSettingChange()"> <span style="font-size:12px;color:var(--text-muted)">hrs</span></div>
       </div>
       <div style="font-size:13px;font-weight:600;margin:16px 0 10px;color:var(--text-muted)">NO-ENTRY WINDOWS</div>
       <div class="setting-row" style="border-bottom:none;padding-bottom:4px">
         <div><div class="setting-label">Apply no-entry restrictions</div><div class="setting-sub">Schedule routes around Delhi &amp; Gurgaon no-entry windows</div></div>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="toggleNoEntry()">
           <div style="position:relative;display:inline-block;width:44px;height:24px">
-            <input type="checkbox" id="s-no-entry" checked style="opacity:0;width:0;height:0;position:absolute">
-            <span id="s-no-entry-track" onclick="toggleNoEntry()" style="position:absolute;inset:0;background:var(--green);border-radius:24px;cursor:pointer;transition:.2s">
+            <span id="s-no-entry-track" style="position:absolute;inset:0;background:var(--green);border-radius:24px;cursor:pointer;transition:.2s">
               <span id="s-no-entry-thumb" style="position:absolute;left:22px;top:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
             </span>
           </div>
           <span id="s-no-entry-label" style="font-size:12px;font-weight:500;color:var(--green)">ON</span>
-        </label>
+        </div>
       </div>
       <div id="no-entry-details">
         <div style="font-size:12px;padding:5px 0;border-top:1px solid var(--gray-border);border-bottom:1px solid var(--gray-border);margin-top:4px"><strong>Delhi:</strong> 7:00 AM–11:00 AM &amp; 4:00 PM–9:00 PM</div>
@@ -384,6 +383,9 @@ const WH = {lat:28.938543, lon:77.082583};
 let generatedRoutes = [];
 let currentRouteIdx = null;
 let mapInstance = null;
+let noEntryEnabled = true;   // no-entry toggle state
+const ROAD_CITY = 1.3;       // aerial → road distance factor (city)
+const ROAD_HWY  = 1.15;      // aerial → road distance factor (outstation/highway)
 
 // ═══════════════════════════════════════════════
 //  UTILITY FUNCTIONS
@@ -464,18 +466,24 @@ function getSettings(){
     maxHours:parseInt(document.getElementById('s-max-hours')?.value||12),
     overtimeHours:parseInt(document.getElementById('s-overtime-hours')?.value||14),
     outstationKm:parseInt(document.getElementById('s-outstation-km')?.value||80),
-    noEntry:document.getElementById('s-no-entry')?.checked!==false
+    noEntry:noEntryEnabled
   };
 }
 function toggleNoEntry(){
-  const cb=document.getElementById('s-no-entry');
-  cb.checked=!cb.checked;
-  const on=cb.checked;
+  noEntryEnabled=!noEntryEnabled;
+  const on=noEntryEnabled;
   document.getElementById('s-no-entry-track').style.background=on?'var(--green)':'#cbd5e1';
   document.getElementById('s-no-entry-thumb').style.left=on?'22px':'3px';
   document.getElementById('s-no-entry-label').textContent=on?'ON':'OFF';
   document.getElementById('s-no-entry-label').style.color=on?'var(--green)':'var(--text-muted)';
   document.getElementById('no-entry-details').style.opacity=on?'1':'0.4';
+  onSettingChange();
+}
+function onSettingChange(){
+  if(parsedOrders&&parsedOrders.length>0){
+    clearTimeout(window._settingTimer);
+    window._settingTimer=setTimeout(()=>{generateRoutes();showToast('Routes updated!');},800);
+  }
 }
 function assignVehicle(weight){
   // Prefer larger vehicles to maximise load per trip & reduce total vehicles
@@ -516,10 +524,10 @@ function estimateRouteMins(stops,s){
   let time=s.loadingMin;
   let prevLat=WH.lat,prevLon=WH.lon;
   for(const o of ordered){
-    time+=(haversine(prevLat,prevLon,o.lat,o.lon)/s.citySpeed)*60+s.unloadingMin;
+    time+=(haversine(prevLat,prevLon,o.lat,o.lon)*ROAD_CITY/s.citySpeed)*60+s.unloadingMin;
     prevLat=o.lat;prevLon=o.lon;
   }
-  time+=haversine(prevLat,prevLon,WH.lat,WH.lon)/s.citySpeed*60;
+  time+=haversine(prevLat,prevLon,WH.lat,WH.lon)*ROAD_CITY/s.citySpeed*60;
   return time;
 }
 
@@ -699,6 +707,7 @@ function clusterByDirection(orders,s){
 
 function buildRouteFromCluster(cluster,s,isOutstation){
   const speed=isOutstation?s.highwaySpeed:s.citySpeed;
+  const rf=isOutstation?ROAD_HWY:ROAD_CITY; // road distance factor
   // Order stops: nearest-neighbour from warehouse
   const ordered=nearestNeighbour(cluster);
   // Calculate timing
@@ -713,7 +722,7 @@ function buildRouteFromCluster(cluster,s,isOutstation){
   }
   totalDistKm+=haversine(prevLat,prevLon,WH.lat,WH.lon);
 
-  const travelMins=(totalDistKm/speed)*60;
+  const travelMins=(totalDistKm*rf/speed)*60;
   const unloadingMins=ordered.length*s.unloadingMin;
   const totalRouteMins=s.loadingMin+travelMins+unloadingMins;
 
@@ -742,7 +751,7 @@ function buildRouteFromCluster(cluster,s,isOutstation){
       let travelToStop=s.loadingMin;
       let pl=WH.lat,plo=WH.lon;
       for(const o of ordered){
-        travelToStop+=(haversine(pl,plo,o.lat,o.lon)/speed)*60;
+        travelToStop+=(haversine(pl,plo,o.lat,o.lon)*rf/speed)*60;
         if(o===firstRestricted) break;
         travelToStop+=s.unloadingMin;
         pl=o.lat;plo=o.lon;
@@ -765,7 +774,7 @@ function buildRouteFromCluster(cluster,s,isOutstation){
     let conflicts=0;
     const stops=ordered.map((o,i)=>{
       const dist=haversine(pl,plo,o.lat,o.lon);
-      cum+=(dist/speed)*60;
+      cum+=(dist*rf/speed)*60;
       const zone=getZone(o.lat,o.lon);
       // If restricted zone and no-entry, wait until next allowed window
       if((zone==='Delhi'||zone==='Gurgaon')&&isNoEntry(zone,Math.round(cum))){
@@ -797,7 +806,7 @@ function buildRouteFromCluster(cluster,s,isOutstation){
 
   const lastStop=stopsWithTime[stopsWithTime.length-1];
   const lastArrival=lastStop.arrivalMins+s.unloadingMin;
-  const returnMins=Math.round(lastArrival+haversine(lastStop.lat,lastStop.lon,WH.lat,WH.lon)/speed*60);
+  const returnMins=Math.round(lastArrival+haversine(lastStop.lat,lastStop.lon,WH.lat,WH.lon)*rf/speed*60);
   const zones=[...new Set(stopsWithTime.map(s=>s.zone||getZone(s.lat,s.lon)))];
 
   return{
@@ -1006,7 +1015,7 @@ function openRouteModal(route,idx){
     const distFromPrev=Math.round(haversine(prev.lat,prev.lon,s.lat,s.lon)*10)/10;
     const distFromWH=Math.round(haversine(WH.lat,WH.lon,s.lat,s.lon)*10)/10;
     const fromLabel=si===0?`${distFromPrev} km from warehouse`:`${distFromPrev} km from stop ${si}`;
-    const travelMins=Math.round((distFromPrev/speed)*60);
+    const travelMins=Math.round((distFromPrev*(route.isOutstation?ROAD_HWY:ROAD_CITY)/speed)*60);
     const departMins=s.arrivalMins+settings.unloadingMin;
     const departTime=minutesToTime(departMins);
     // Connector arrow between stops (shows travel time AFTER previous stop's unloading)
