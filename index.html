@@ -706,8 +706,8 @@ function clusterByDirection(orders,s){
 function buildRouteFromCluster(cluster,s,isOutstation){
   const speed=isOutstation?s.highwaySpeed:s.citySpeed;
   const rf=isOutstation?ROAD_HWY:ROAD_CITY; // road distance factor
-  // Order stops: nearest-neighbour from warehouse
-  const ordered=nearestNeighbour(cluster);
+  // Order stops: ETA-bucketed nearest-neighbour (morning → afternoon → evening)
+  const ordered=etaSortedNeighbour(cluster);
   // Calculate timing
   const totalWeight=ordered.reduce((s,o)=>s+o.weight,0);
   const vehicle=assignVehicle(totalWeight);
@@ -794,9 +794,14 @@ function buildRouteFromCluster(cluster,s,isOutstation){
 }
 
 function nearestNeighbour(stops){
+  return nearestNeighbourFrom(stops,WH.lat,WH.lon);
+}
+
+// Nearest-neighbour from an arbitrary starting position (used by etaSortedNeighbour)
+function nearestNeighbourFrom(stops,startLat,startLon){
   const result=[];
   const remaining=[...stops];
-  let curLat=WH.lat,curLon=WH.lon;
+  let curLat=startLat,curLon=startLon;
   while(remaining.length>0){
     let best=0,bestDist=Infinity;
     for(let i=0;i<remaining.length;i++){
@@ -806,6 +811,32 @@ function nearestNeighbour(stops){
     result.push(remaining[best]);
     curLat=remaining[best].lat;curLon=remaining[best].lon;
     remaining.splice(best,1);
+  }
+  return result;
+}
+
+// Order stops by ETA bucket (morning → afternoon → evening → flexible),
+// applying nearest-neighbour within each bucket and chaining buckets together.
+// This ensures the dispatch optimizer sees a natural early→late progression
+// rather than having to reconcile a 3 AM stop mixed with a 9 PM stop.
+function etaSortedNeighbour(stops){
+  function bucket(stop){
+    const eta=etaToMinutes(stop.eta);
+    if(eta>=23*60+59) return 3; // "As per customer" → last
+    if(eta<12*60)     return 0; // morning  : before noon
+    if(eta<17*60)     return 1; // afternoon: noon–5 PM
+    return 2;                    // evening  : after 5 PM
+  }
+  const buckets=[[],[],[],[]];
+  for(const stop of stops) buckets[bucket(stop)].push(stop);
+  let curLat=WH.lat,curLon=WH.lon;
+  const result=[];
+  for(const b of buckets){
+    if(b.length===0) continue;
+    const ordered=nearestNeighbourFrom(b,curLat,curLon);
+    result.push(...ordered);
+    const last=ordered[ordered.length-1];
+    curLat=last.lat;curLon=last.lon;
   }
   return result;
 }
