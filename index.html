@@ -515,13 +515,15 @@ function fuzzyMatch(name){
 //  ROUTING ALGORITHM
 // ═══════════════════════════════════════════════
 
-// Quick route time estimator (uses nearest-neighbour ordering).
-// Simulates from a 6 AM reference dispatch so no-entry window waits
-// are included — clustering will correctly split routes that would
-// otherwise balloon past the driver-hours limit once waits are added.
+// Quick route time estimator.
+// Uses the SAME etaSortedNeighbour ordering as buildRouteFromCluster so
+// the estimate matches actual route duration. Simulates from a 6 AM
+// reference dispatch so no-entry window waits are also included.
+// This ensures clustering never packs more stops than the driver-hours
+// limit allows, regardless of whether no-entry restrictions are on.
 function estimateRouteMins(stops,s){
   if(!stops||stops.length===0) return s.loadingMin;
-  const ordered=nearestNeighbour([...stops]);
+  const ordered=etaSortedNeighbour([...stops]); // must match buildRouteFromCluster ordering
   const dispRef=6*60; // 6 AM reference dispatch
   let cum=dispRef+s.loadingMin;
   let prevLat=WH.lat,prevLon=WH.lon;
@@ -585,6 +587,26 @@ function minVehicleCluster(orders,s){
   return clusters;
 }
 
+// Guarantee: build a route from a cluster and, if it exceeds the driver
+// hours limit, split it into two halves (using ETA-sorted order so morning
+// stops go to Route A and evening stops to Route B) and recurse until every
+// resulting route fits within overtimeHours.  Single-stop routes are never
+// split further regardless of duration.
+function buildRouteRespectingHours(cluster,s,isOutstation){
+  const route=buildRouteFromCluster(cluster,s,isOutstation);
+  const limit=s.overtimeHours*60;
+  if(route.totalRouteMins<=limit||cluster.length<=1) return[route];
+  // Split along ETA-sorted order so the first half gets early-ETA stops
+  // and the second half gets late-ETA stops — each half gets a sensible
+  // dispatch window and is far less likely to span two no-entry windows.
+  const ordered=etaSortedNeighbour([...cluster]);
+  const mid=Math.ceil(ordered.length/2);
+  return[
+    ...buildRouteRespectingHours(ordered.slice(0,mid),s,isOutstation),
+    ...buildRouteRespectingHours(ordered.slice(mid),s,isOutstation)
+  ];
+}
+
 function buildRoutes(orders){
   const s=getSettings();
   // Separate outstation
@@ -601,11 +623,9 @@ function buildRoutes(orders){
 
   // --- OUTSTATION: group by proximity ---
   if(outstation.length>0){
-    // Cluster by direction & weight
     const outstationClusters=clusterByDirection(outstation,s);
     for(const cluster of outstationClusters){
-      const route=buildRouteFromCluster(cluster,s,true);
-      routes.push(route);
+      routes.push(...buildRouteRespectingHours(cluster,s,true));
     }
   }
 
@@ -615,8 +635,7 @@ function buildRoutes(orders){
   if(ncr.length>0){
     const ncrClusters=minVehicleCluster(ncr,s);
     for(const cluster of ncrClusters){
-      const route=buildRouteFromCluster(cluster,s,false);
-      routes.push(route);
+      routes.push(...buildRouteRespectingHours(cluster,s,false));
     }
   }
   return routes.sort((a,b)=>a.dispatchMins-b.dispatchMins);
@@ -892,7 +911,7 @@ function parseCSV(file,name){
       tr.innerHTML=`
         <td>${outletName}</td>
         <td class="${masterMatch?'match-ok':'match-fail'}">${masterMatch?masterMatch.name:'⚠ No match found'}</td>
-        <td>${weight} kg</td>
+        <td>${parseFloat(weight).toFixed(2)} kg</td>
         <td>${masterMatch?masterMatch.eta:'-'}</td>
         <td><span class="badge ${zone==='Outstation'?'badge-outstation':'badge-ncr'}">${zone}</span></td>
         <td>${dist?dist+' km':'-'}</td>`;
@@ -907,7 +926,7 @@ function parseCSV(file,name){
       <div class="stat"><div class="stat-label">Total orders</div><div class="stat-value">${matched+unmatched}</div></div>
       <div class="stat"><div class="stat-label">Matched</div><div class="stat-value" style="color:var(--green)">${matched}</div></div>
       <div class="stat"><div class="stat-label">Unmatched</div><div class="stat-value" style="color:${unmatched?'var(--red)':'var(--green)'}">${unmatched}</div></div>
-      <div class="stat"><div class="stat-label">Total weight</div><div class="stat-value">${totalW} kg</div></div>`;
+      <div class="stat"><div class="stat-label">Total weight</div><div class="stat-value">${totalW.toFixed(2)} kg</div></div>`;
   };
   reader.readAsText(file);
 }
@@ -939,7 +958,7 @@ function renderRoutesPage(){
   document.getElementById('route-summary-stats').innerHTML=`
     <div class="stat"><div class="stat-label">Total routes</div><div class="stat-value">${generatedRoutes.length}</div></div>
     <div class="stat"><div class="stat-label">Total stops</div><div class="stat-value">${total}</div></div>
-    <div class="stat"><div class="stat-label">Total weight</div><div class="stat-value">${totalW} kg</div></div>
+    <div class="stat"><div class="stat-label">Total weight</div><div class="stat-value">${totalW.toFixed(2)} kg</div></div>
     <div class="stat"><div class="stat-label">Outstation routes</div><div class="stat-value" style="color:${outst?'var(--amber)':'var(--green)'}">${outst}</div>${conflicts?`<div class="stat-sub">${conflicts} with scheduling conflicts</div>`:''}`;
   document.getElementById('routes-page-sub').textContent=`${generatedRoutes.length} routes optimised · ${total} stops covered`;
   renderRouteCards();
@@ -1020,8 +1039,8 @@ function openRouteModal(route,idx){
     const s=route.stops[si];
     cumW-=s.weight;
     const prev=prevPoints[si];
-    const distFromPrev=Math.round(haversine(prev.lat,prev.lon,s.lat,s.lon)*10)/10;
-    const distFromWH=Math.round(haversine(WH.lat,WH.lon,s.lat,s.lon)*10)/10;
+    const distFromPrev=(Math.round(haversine(prev.lat,prev.lon,s.lat,s.lon)*100)/100).toFixed(2);
+    const distFromWH=(Math.round(haversine(WH.lat,WH.lon,s.lat,s.lon)*100)/100).toFixed(2);
     const fromLabel=si===0?`${distFromPrev} km from warehouse`:`${distFromPrev} km from stop ${si}`;
     const travelMins=Math.round((distFromPrev*(route.isOutstation?ROAD_HWY:ROAD_CITY)/speed)*60);
     const departMins=s.arrivalMins+settings.unloadingMin;
@@ -1043,9 +1062,9 @@ function openRouteModal(route,idx){
           <span>ETA: ${s.eta==='As per customer'?'Flexible':s.eta.replace(':00 ',' ')}</span>
           <span style="color:var(--green);font-weight:600">▶ Arrive: ${s.arrivalTime}</span>
           <span style="color:#1d4ed8;font-weight:500">◀ Depart: ${departTime}</span>
-          <span>${s.weight} kg</span>
+          <span>${(+s.weight).toFixed(2)} kg</span>
           <span style="color:var(--text-muted)">📍 ${fromLabel} · ${distFromWH} km from WH</span>
-          <span>Load left: ${cumW} kg</span>
+          <span>Load left: ${cumW.toFixed(2)} kg</span>
           ${s.conflict?'<span style="color:var(--red);font-weight:600">⚠ No-entry conflict</span>':''}
           ${s.late&&!s.conflict?'<span style="color:var(--amber);font-weight:600">⚠ Late arrival</span>':''}
         </div>
@@ -1071,7 +1090,7 @@ function initRouteMap(route){
   route.stops.forEach((s,i)=>{
     const color=s.conflict?'#dc2626':s.late?'#d97706':'#1d4ed8';
     const icon=L.divIcon({className:'',html:`<div style="background:${color};color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3)">${i+1}</div>`,iconSize:[22,22],iconAnchor:[11,11]});
-    L.marker([s.lat,s.lon],{icon}).addTo(mapInstance).bindPopup(`<b>${i+1}. ${s.name}</b><br>Arrive: ${s.arrivalTime}<br>Weight: ${s.weight}kg`);
+    L.marker([s.lat,s.lon],{icon}).addTo(mapInstance).bindPopup(`<b>${i+1}. ${s.name}</b><br>Arrive: ${s.arrivalTime}<br>Weight: ${(+s.weight).toFixed(2)}kg`);
   });
   const bounds=L.latLngBounds(latlngs);
   mapInstance.fitBounds(bounds,{padding:[20,20]});
@@ -1097,7 +1116,7 @@ function copyRouteForDriver(){
   text+=`Total: ${rt.stops.length} stops | ${rt.totalWeight}kg | ${rt.totalDistKm}km\n\n`;
   text+=`📍 DROP SEQUENCE:\n`;
   rt.stops.forEach((s,i)=>{
-    text+=`${i+1}. ${s.name}\n   ETA: ${s.eta==='As per customer'?'Flexible':s.eta} | Arrive by: ${s.arrivalTime} | ${s.weight}kg\n`;
+    text+=`${i+1}. ${s.name}\n   ETA: ${s.eta==='As per customer'?'Flexible':s.eta} | Arrive by: ${s.arrivalTime} | ${(+s.weight).toFixed(2)}kg\n`;
   });
   text+=`\n🏭 Return to warehouse by: ${rt.returnTime}`;
   navigator.clipboard.writeText(text).then(()=>showToast('Copied to clipboard!')).catch(()=>{});
