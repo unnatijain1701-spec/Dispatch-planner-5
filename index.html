@@ -515,18 +515,28 @@ function fuzzyMatch(name){
 //  ROUTING ALGORITHM
 // ═══════════════════════════════════════════════
 
-// Quick route time estimator (uses nearest-neighbour ordering)
+// Quick route time estimator (uses nearest-neighbour ordering).
+// Simulates from a 6 AM reference dispatch so no-entry window waits
+// are included — clustering will correctly split routes that would
+// otherwise balloon past the driver-hours limit once waits are added.
 function estimateRouteMins(stops,s){
   if(!stops||stops.length===0) return s.loadingMin;
   const ordered=nearestNeighbour([...stops]);
-  let time=s.loadingMin;
+  const dispRef=6*60; // 6 AM reference dispatch
+  let cum=dispRef+s.loadingMin;
   let prevLat=WH.lat,prevLon=WH.lon;
   for(const o of ordered){
-    time+=(haversine(prevLat,prevLon,o.lat,o.lon)*ROAD_CITY/s.citySpeed)*60+s.unloadingMin;
+    cum+=(haversine(prevLat,prevLon,o.lat,o.lon)*ROAD_CITY/s.citySpeed)*60;
+    // Honour no-entry windows so the estimate reflects real wait times
+    const zone=getZone(o.lat,o.lon);
+    if(s.noEntry&&(zone==='Delhi'||zone==='Gurgaon')&&isNoEntry(zone,Math.round(cum))){
+      cum=nextAllowedWindow(zone,Math.round(cum));
+    }
+    cum+=s.unloadingMin;
     prevLat=o.lat;prevLon=o.lon;
   }
-  time+=haversine(prevLat,prevLon,WH.lat,WH.lon)*ROAD_CITY/s.citySpeed*60;
-  return time;
+  cum+=haversine(prevLat,prevLon,WH.lat,WH.lon)*ROAD_CITY/s.citySpeed*60;
+  return cum-dispRef; // duration including any no-entry waits
 }
 
 // Cross-zone clustering that minimises vehicle count.
