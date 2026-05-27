@@ -722,91 +722,54 @@ function buildRouteFromCluster(cluster,s,isOutstation){
   }
   totalDistKm+=haversine(prevLat,prevLon,WH.lat,WH.lon);
 
-  const travelMins=(totalDistKm*rf/speed)*60;
-  const unloadingMins=ordered.length*s.unloadingMin;
-  const totalRouteMins=s.loadingMin+travelMins+unloadingMins;
+  // totalRouteMins will be derived from actual simulation (returnMins - dispatchMins) below
 
   // ── Dispatch time calculation ──
-  // Strategy: try morning window first, then evening window, pick whichever
-  // gets all restricted stops delivered on time without no-entry conflicts.
-  const earliestETA=Math.min(...ordered.map(o=>etaToMinutes(o.eta)));
-  const firstStopDist=haversine(WH.lat,WH.lon,ordered[0].lat,ordered[0].lon);
-  const timeToFirstStop=(firstStopDist/speed)*60+s.loadingMin;
-
-  // Check if route has Delhi or Gurgaon stops (only matters when no-entry is ON)
-  const hasRestricted=s.noEntry&&ordered.some(o=>{
-    const z=getZone(o.lat,o.lon);
-    return z==='Delhi'||z==='Gurgaon';
-  });
-
-  // Candidate dispatch times to try
-  let candidates=[];
-  if(hasRestricted){
-    // Morning window: target first restricted stop to arrive at 7am (Delhi) or 8am (Gurgaon)
-    const firstRestricted=ordered.find(o=>{const z=getZone(o.lat,o.lon);return z==='Delhi'||z==='Gurgaon';});
-    if(firstRestricted){
-      const zone=getZone(firstRestricted.lat,firstRestricted.lon);
-      const windowStart=zone==='Gurgaon'?8*60:7*60;
-      // Time from WH to that stop (approx via cumulative travel)
-      let travelToStop=s.loadingMin;
-      let pl=WH.lat,plo=WH.lon;
-      for(const o of ordered){
-        travelToStop+=(haversine(pl,plo,o.lat,o.lon)*rf/speed)*60;
-        if(o===firstRestricted) break;
-        travelToStop+=s.unloadingMin;
-        pl=o.lat;plo=o.lon;
-      }
-      candidates.push(windowStart-travelToStop);
-      // Evening window: target 4pm / 5pm
-      const eveningStart=zone==='Gurgaon'?17*60:16*60;
-      candidates.push(eveningStart-travelToStop);
-    }
-  }
-  // Always add ETA-driven candidate
-  candidates.push(earliestETA-timeToFirstStop);
-  // Min 4am dispatch
-  candidates=candidates.map(c=>Math.max(c,4*60));
-
-  // Simulate each candidate, pick the one with fewest conflicts
+  // Dense sweep: try every 15 min from 3am–10pm, score by conflicts then late arrivals.
+  // This finds the globally optimal dispatch window, eliminating most warnings automatically.
   function simulateDispatch(dispMins){
     let cum=dispMins+s.loadingMin;
     let pl=WH.lat,plo=WH.lon;
-    let conflicts=0;
+    let conflicts=0,lateCount=0;
     const stops=ordered.map((o,i)=>{
       const dist=haversine(pl,plo,o.lat,o.lon);
       cum+=(dist*rf/speed)*60;
       const zone=getZone(o.lat,o.lon);
-      // If restricted zone and no-entry, wait until next allowed window
-      if((zone==='Delhi'||zone==='Gurgaon')&&isNoEntry(zone,Math.round(cum))){
-        const nextW=nextAllowedWindow(zone,Math.round(cum));
-        cum=nextW; // wait
-        conflicts++; // still a conflict (had to wait)
+      // Respect no-entry windows: silently wait until the next allowed slot
+      if(s.noEntry&&(zone==='Delhi'||zone==='Gurgaon')&&isNoEntry(zone,Math.round(cum))){
+        cum=nextAllowedWindow(zone,Math.round(cum));
       }
       const arr=Math.round(cum);
       const etaMins=etaToMinutes(o.eta);
       const late=arr>etaMins&&etaMins<23*60;
+      if(late) lateCount++;
       const zone2=getZone(o.lat,o.lon);
-      const conflict=(zone2==='Delhi'||zone2==='Gurgaon')&&isNoEntry(zone2,arr);
+      const conflict=s.noEntry&&(zone2==='Delhi'||zone2==='Gurgaon')&&isNoEntry(zone2,arr);
+      if(conflict) conflicts++;
       cum+=s.unloadingMin;
       pl=o.lat;plo=o.lon;
       return{...o,arrivalMins:arr,arrivalTime:minutesToTime(arr),conflict,late,stopNum:i+1,dist:Math.round(dist*10)/10,zone:zone2};
     });
-    return{stops,conflicts,dispMins};
+    return{stops,conflicts,lateCount,dispMins};
   }
 
   let best=null;
-  for(const c of candidates){
-    const sim=simulateDispatch(c);
-    if(!best||sim.conflicts<best.conflicts) best=sim;
+  for(let t=3*60;t<=22*60;t+=15){
+    const sim=simulateDispatch(t);
+    const score=sim.conflicts*1000+sim.lateCount;
+    if(!best||score<best.score||(score===best.score&&t<best.dispMins)){
+      best={...sim,score};
+    }
   }
 
-  let dispatchMins=best.dispMins;
+  const dispatchMins=best.dispMins;
   const stopsWithTime=best.stops;
-  let hasConflict=stopsWithTime.some(s=>s.conflict);
+  const hasConflict=stopsWithTime.some(s=>s.conflict);
 
   const lastStop=stopsWithTime[stopsWithTime.length-1];
   const lastArrival=lastStop.arrivalMins+s.unloadingMin;
   const returnMins=Math.round(lastArrival+haversine(lastStop.lat,lastStop.lon,WH.lat,WH.lon)*rf/speed*60);
+  const totalRouteMins=returnMins-dispatchMins; // actual time including any window-waits
   const zones=[...new Set(stopsWithTime.map(s=>s.zone||getZone(s.lat,s.lon)))];
 
   return{
